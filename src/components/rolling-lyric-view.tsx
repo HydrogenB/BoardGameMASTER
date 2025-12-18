@@ -3,6 +3,7 @@ import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 import type { Step, Checkpoint } from "@/lib/types"
 import { CheckpointStep } from "@/components/checkpoint-step"
+import { CountdownTimer } from "@/components/countdown-timer"
 
 export interface ExtendedStep extends Step {
     phaseIndex: number
@@ -86,12 +87,21 @@ export function RollingLyricView({
                             animate={{
                                 opacity,
                                 scale,
-                                filter: isActive ? "blur(0px)" : `blur(${distance}px)`
+                                filter: "blur(0px)" // Blur removed as requested
                             }}
                             onClick={() => onStepClick(index)}
                             whileTap={{ scale: 0.95 }}
                         >
                             <div>{step.text_th}</div>
+                            {isActive && step.timerSeconds && step.timerSeconds > 0 && (
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="mt-6"
+                                >
+                                    <CountdownTimer initialSeconds={step.timerSeconds} />
+                                </motion.div>
+                            )}
                             {step.helper_th && isActive && (
                                 <motion.div
                                     initial={{ opacity: 0, height: 0 }}

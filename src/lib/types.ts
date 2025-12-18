@@ -1,4 +1,4 @@
-export type GameId = "werewolf"
+export type GameId = "werewolf" | "catan"
 
 export type GameStatus = "IN_PROGRESS" | "COMPLETED" | "ABANDONED"
 
@@ -31,6 +31,7 @@ export interface Step {
     helper_th?: string
     can_skip: boolean
     requires_confirm?: boolean
+    timerSeconds?: number
 }
 
 export interface Phase {

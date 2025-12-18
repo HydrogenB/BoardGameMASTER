@@ -16,6 +16,8 @@ export function LandingPage() {
         if (activeSessionId) {
             if (activeSession?.gameId === 'werewolf') {
                 navigate('/werewolf/play')
+            } else if (activeSession?.gameId === 'catan') {
+                navigate('/catan/play')
             }
         }
     }
@@ -72,13 +74,24 @@ export function LandingPage() {
                     </CardFooter>
                 </Card>
 
-                <Card className="opacity-60 grayscale cursor-not-allowed">
+                <Card className="hover:border-primary/50 transition-colors">
                     <CardHeader>
                         <CardTitle>Catan</CardTitle>
                         <CardDescription>นักบุกเบิกแห่ง Catan</CardDescription>
                     </CardHeader>
+                    <CardContent>
+                        <p className="text-sm text-muted-foreground">
+                            ผู้ช่วยทอยเต๋าและติดตามสถิติสำหรับ Catan
+                            หมดปัญหาลูกเต๋าหายหรือทอยไม่แฟร์!
+                        </p>
+                    </CardContent>
                     <CardFooter>
-                        <Button variant="outline" disabled className="w-full">เร็วๆ นี้</Button>
+                        <Link to="/catan/setup" className="w-full">
+                            <Button variant="outline" className="w-full">
+                                <Play className="mr-2 w-4 h-4" />
+                                เริ่มเกมใหม่
+                            </Button>
+                        </Link>
                     </CardFooter>
                 </Card>
             </div>

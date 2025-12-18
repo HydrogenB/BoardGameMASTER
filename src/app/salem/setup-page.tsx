@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { ChevronLeft, Flame, Users, Minus, Plus } from "lucide-react"
 import type { SalemSettings } from "@/games/salem/types"
-import { getDefaultSalemSettings, SALEM_PLAYER_COUNTS } from "@/games/salem/types"
-import { SalemStrings, getTryalCardCounts } from "@/games/salem/strings.th"
+import { getDefaultSalemSettings, SALEM_PLAYER_COUNTS, getTryalCardCounts } from "@/games/salem/types"
+import { SalemStrings } from "@/games/salem/strings.th"
 
 export function SalemSetupPage() {
     const navigate = useNavigate()
@@ -21,14 +21,13 @@ export function SalemSetupPage() {
         return lastSettings ? { ...defaults, ...lastSettings } : defaults
     })
 
-    // Update player names when count changes
     useEffect(() => {
         if (settings.playerNames.length !== settings.playerCount) {
             const newNames = [...settings.playerNames]
             while (newNames.length < settings.playerCount) {
                 newNames.push(`ผู้เล่น ${String.fromCharCode(65 + newNames.length)}`)
             }
-            setSettings(s => ({ ...s, playerNames: newNames.slice(0, settings.playerCount) }))
+            setSettings((s: SalemSettings) => ({ ...s, playerNames: newNames.slice(0, settings.playerCount) }))
         }
     }, [settings.playerCount, settings.playerNames.length])
 
@@ -42,13 +41,13 @@ export function SalemSetupPage() {
     const adjustPlayerCount = (delta: number) => {
         const currentIndex = SALEM_PLAYER_COUNTS.indexOf(settings.playerCount as typeof SALEM_PLAYER_COUNTS[number])
         const newIndex = Math.max(0, Math.min(SALEM_PLAYER_COUNTS.length - 1, currentIndex + delta))
-        setSettings(s => ({ ...s, playerCount: SALEM_PLAYER_COUNTS[newIndex] }))
+        setSettings((s: SalemSettings) => ({ ...s, playerCount: SALEM_PLAYER_COUNTS[newIndex] }))
     }
 
     const updatePlayerName = (index: number, name: string) => {
         const newNames = [...settings.playerNames]
         newNames[index] = name
-        setSettings(s => ({ ...s, playerNames: newNames }))
+        setSettings((s: SalemSettings) => ({ ...s, playerNames: newNames }))
     }
 
     return (
@@ -124,7 +123,7 @@ export function SalemSetupPage() {
                 </CardHeader>
                 <CardContent>
                     <div className="grid grid-cols-2 gap-2">
-                        {settings.playerNames.map((name, i) => (
+                        {settings.playerNames.map((name: string, i: number) => (
                             <Input
                                 key={i}
                                 value={name}
@@ -137,7 +136,7 @@ export function SalemSetupPage() {
                 </CardContent>
             </Card>
 
-            {/* Role Toggles */}
+            {/* Role Toggle - Only Constable in base game */}
             <Card>
                 <CardHeader className="pb-2">
                     <CardTitle className="text-base">ตัวละครเสริม</CardTitle>
@@ -152,20 +151,7 @@ export function SalemSetupPage() {
                         </div>
                         <Switch
                             checked={settings.hasConstable}
-                            onCheckedChange={(checked) => setSettings(s => ({ ...s, hasConstable: checked }))}
-                        />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <Label className="flex items-center gap-2">
-                                ⛪ Confessor (บาทหลวง)
-                            </Label>
-                            <p className="text-xs text-muted-foreground">ตรวจสอบ Tryal Card ของผู้เล่นได้ 1 ใบ</p>
-                        </div>
-                        <Switch
-                            checked={settings.hasConfessor}
-                            onCheckedChange={(checked) => setSettings(s => ({ ...s, hasConfessor: checked }))}
+                            onCheckedChange={(checked) => setSettings((s: SalemSettings) => ({ ...s, hasConstable: checked }))}
                         />
                     </div>
                 </CardContent>
@@ -184,7 +170,7 @@ export function SalemSetupPage() {
                         </div>
                         <Switch
                             checked={settings.beginnerMode}
-                            onCheckedChange={(checked) => setSettings(s => ({ ...s, beginnerMode: checked }))}
+                            onCheckedChange={(checked) => setSettings((s: SalemSettings) => ({ ...s, beginnerMode: checked }))}
                         />
                     </div>
 
@@ -195,17 +181,14 @@ export function SalemSetupPage() {
                         </div>
                         <Switch
                             checked={settings.notesEnabled}
-                            onCheckedChange={(checked) => setSettings(s => ({ ...s, notesEnabled: checked }))}
+                            onCheckedChange={(checked) => setSettings((s: SalemSettings) => ({ ...s, notesEnabled: checked }))}
                         />
                     </div>
                 </CardContent>
             </Card>
 
             {/* Start Button */}
-            <Button
-                className="w-full h-14 text-lg rounded-full shadow-lg"
-                onClick={handleStart}
-            >
+            <Button className="w-full h-14 text-lg rounded-full shadow-lg" onClick={handleStart}>
                 <Flame className="mr-2 h-5 w-5" />
                 {SalemStrings.UI.START_GAME}
             </Button>

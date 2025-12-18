@@ -7,9 +7,9 @@ const genId = () => crypto.randomUUID()
 
 export function twoRoomsScriptFactory(settings: TwoRoomsSettings): Phase[] {
     const phases: Phase[] = []
-    const { playerCount, config, features } = settings
+    const { playerCount, config, features: _features } = settings
     const playersPerRoom = Math.ceil(playerCount / 2)
-    const totalRounds = config.rounds.length
+    const _totalRounds = config.rounds.length
 
     // ===== Phase 0: SETUP_PHASE =====
     phases.push({

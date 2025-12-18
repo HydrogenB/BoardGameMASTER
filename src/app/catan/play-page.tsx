@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { useAppStore } from "@/state/store"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { ArrowLeft, History, Skull, Check, NotebookPen, ChevronLeft, SkipForward, AlertTriangle } from "lucide-react"
+import { ArrowLeft, History, Check, NotebookPen, ChevronLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { RollingLyricView } from "@/components/rolling-lyric-view"
 import { NotesSheet } from "@/components/notes-sheet"
@@ -12,7 +12,7 @@ import { catanScriptFactory, generateRobberSubflow } from "@/games/catan/scriptF
 import { CatanStrings } from "@/games/catan/strings.th"
 import type { Step, Checkpoint, Phase } from "@/lib/types"
 
-const DICE_FACES = ["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"]
+// Dice faces removed - using simpler display
 
 export function CatanPlayPage() {
     const navigate = useNavigate()
@@ -229,12 +229,12 @@ export function CatanPlayPage() {
     }
 
     // Manual "ทอยได้ 7" trigger
-    const handleManualRobber = () => {
+    const _handleManualRobber = () => {
         triggerRobberFlow()
     }
 
     // Jump to next player (end current player's turn early)
-    const handleNextPlayer = () => {
+    const _handleNextPlayer = () => {
         // Find next turn-start step
         for (let i = currentGlobalIndex + 1; i < allSteps.length; i++) {
             if (allSteps[i].id.startsWith("turn-start-")) {
@@ -250,8 +250,8 @@ export function CatanPlayPage() {
         navigate("/catan/summary")
     }
 
-    const lastRoll = currentRoll || (history.length > 0 ? history[0] : { die1: 1, die2: 1, sum: 2 })
-    const ckMode = settings?.expansionCitiesAndKnights
+    const _lastRoll = currentRoll || (history.length > 0 ? history[0] : { die1: 1, die2: 1, sum: 2 })
+    const _ckMode = settings?.expansionCitiesAndKnights
 
     const stepsToShow = robberMode ? robberSteps : allSteps
     const activeIndex = robberMode ? robberStepIndex : currentGlobalIndex

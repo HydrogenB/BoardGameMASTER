@@ -17,7 +17,7 @@ export const Sheet = ({ children }: { children: React.ReactNode }) => {
     )
 }
 
-export const SheetTrigger = ({ asChild, children }: { asChild?: boolean, children: React.ReactNode }) => {
+export const SheetTrigger = ({ asChild: _asChild, children }: { asChild?: boolean, children: React.ReactNode }) => {
     const context = React.useContext(SheetContext)
     if (!context) throw new Error("SheetTrigger must be used within Sheet")
 

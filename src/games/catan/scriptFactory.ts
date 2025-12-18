@@ -7,7 +7,7 @@ const genId = () => crypto.randomUUID()
 
 export function catanScriptFactory(settings: CatanSettings): Phase[] {
     const phases: Phase[] = []
-    const { playerNames, playerCount, checkpointsEnabled } = settings
+    const { playerNames, playerCount, checkpointsEnabled: _checkpointsEnabled } = settings
 
     // --- Phase 0: เตรียมเกม (Setup Checklist) ---
     phases.push({

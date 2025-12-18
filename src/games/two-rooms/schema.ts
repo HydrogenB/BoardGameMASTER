@@ -41,6 +41,7 @@ export const twoRoomsSettingsSchema = z.object({
     features: z.object({
         soundEnabled: z.boolean().default(true),
         autoWarningAt60s: z.boolean().default(true),
+        beginnerMode: z.boolean().default(true), // Show detailed helper text for new GMs
     }),
 })
 

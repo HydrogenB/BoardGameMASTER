@@ -1,197 +1,269 @@
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAppStore } from "@/state/store"
 import { twoRoomsScriptFactory, getTimerColor } from "@/games/two-rooms/scriptFactory"
 import type { TwoRoomsSettings } from "@/games/two-rooms/schema"
-import type { GameState } from "@/games/two-rooms/types"
+import type { Step, Checkpoint } from "@/lib/types"
+import { RollingLyricView, type ExtendedStep } from "@/components/rolling-lyric-view"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import {
     ChevronLeft,
-    ChevronRight,
+    Check,
     Pause,
     Play,
     Volume2,
     VolumeX,
     Bell,
     Bomb,
-    SkipForward
+    RotateCcw,
+    NotebookPen
 } from "lucide-react"
+import { NotesSheet } from "@/components/notes-sheet"
 
 // ===== SOUNDBOARD COMPONENT =====
 function Soundboard({
     onWhistle,
     onBomb,
-    disabled,
     soundEnabled
 }: {
     onWhistle: () => void
     onBomb: () => void
-    disabled: boolean
     soundEnabled: boolean
 }) {
     return (
-        <div className="flex gap-2 justify-center">
+        <div className="flex gap-2 justify-center px-4">
             <Button
                 variant="outline"
                 size="lg"
                 onClick={onWhistle}
-                disabled={disabled || !soundEnabled}
-                className="flex-1 h-14"
+                disabled={!soundEnabled}
+                className="flex-1 h-12"
             >
-                <Bell className="w-5 h-5 mr-2" />
+                <Bell className="w-4 h-4 mr-2" />
                 📢 นกหวีด
             </Button>
             <Button
                 variant="outline"
                 size="lg"
                 onClick={onBomb}
-                disabled={disabled || !soundEnabled}
-                className="flex-1 h-14"
+                disabled={!soundEnabled}
+                className="flex-1 h-12"
             >
-                <Bomb className="w-5 h-5 mr-2" />
+                <Bomb className="w-4 h-4 mr-2" />
                 💣 ระเบิด!
             </Button>
         </div>
     )
 }
 
-// ===== BIG TIMER COMPONENT =====
-function BigTimer({
+// ===== FLOATING TIMER COMPONENT =====
+function FloatingTimer({
     seconds,
     totalSeconds,
     isPaused,
-    onTogglePause
+    onTogglePause,
+    onReset
 }: {
     seconds: number
     totalSeconds: number
     isPaused: boolean
     onTogglePause: () => void
+    onReset: () => void
 }) {
     const minutes = Math.floor(seconds / 60)
     const secs = seconds % 60
     const color = getTimerColor(seconds, totalSeconds)
+    const progress = (seconds / totalSeconds) * 100
 
     return (
-        <div className="text-center py-8">
-            <div
-                className="text-8xl font-mono font-bold tracking-tight transition-colors duration-500"
-                style={{ color }}
-            >
-                {String(minutes).padStart(2, "0")}:{String(secs).padStart(2, "0")}
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-40">
+            <div className={cn(
+                "bg-background/95 backdrop-blur-lg rounded-full px-6 py-3 shadow-xl border-2 flex items-center gap-4",
+                seconds <= 60 && seconds > 0 && "animate-pulse border-red-500"
+            )}>
+                {/* Circular mini progress */}
+                <div className="relative w-10 h-10">
+                    <svg className="w-10 h-10 transform -rotate-90">
+                        <circle
+                            cx="20" cy="20" r="16"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            fill="none"
+                            className="text-muted/30"
+                        />
+                        <circle
+                            cx="20" cy="20" r="16"
+                            stroke={color}
+                            strokeWidth="3"
+                            fill="none"
+                            strokeLinecap="round"
+                            strokeDasharray={2 * Math.PI * 16}
+                            strokeDashoffset={2 * Math.PI * 16 * (1 - progress / 100)}
+                            className="transition-all duration-1000"
+                        />
+                    </svg>
+                </div>
+
+                {/* Timer display */}
+                <div
+                    className="text-3xl font-mono font-bold min-w-[90px] text-center"
+                    style={{ color }}
+                >
+                    {String(minutes).padStart(2, "0")}:{String(secs).padStart(2, "0")}
+                </div>
+
+                {/* Controls */}
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onTogglePause}
+                    className="h-10 w-10"
+                >
+                    {isPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onReset}
+                    className="h-10 w-10"
+                >
+                    <RotateCcw className="w-4 h-4" />
+                </Button>
             </div>
-            {isPaused && (
-                <div className="text-xl text-yellow-500 mt-2 animate-pulse">
+            {isPaused && seconds > 0 && (
+                <div className="text-center text-yellow-500 text-sm mt-1 animate-pulse">
                     ⏸️ หยุดชั่วคราว
                 </div>
             )}
-            <Button
-                variant="ghost"
-                size="lg"
-                onClick={onTogglePause}
-                className="mt-4"
-            >
-                {isPaused ? (
-                    <>
-                        <Play className="w-5 h-5 mr-2" />
-                        เล่นต่อ
-                    </>
-                ) : (
-                    <>
-                        <Pause className="w-5 h-5 mr-2" />
-                        หยุด
-                    </>
-                )}
-            </Button>
         </div>
     )
 }
 
-// ===== ROLLING SCRIPT COMPONENT =====
-function RollingScript({
-    text,
-    helper,
-    isHighlight
+// ===== ROUND PROGRESS INDICATOR =====
+function RoundProgress({
+    currentRound,
+    totalRounds,
+    hostagesToSwap
 }: {
-    text: string
-    helper?: string
-    isHighlight?: boolean
+    currentRound: number
+    totalRounds: number
+    hostagesToSwap: number
 }) {
     return (
-        <Card className={cn(
-            "transition-all duration-300",
-            isHighlight && "border-yellow-500 bg-yellow-500/10 animate-pulse"
-        )}>
-            <CardContent className="p-6 text-center">
-                <p className={cn(
-                    "text-xl font-medium",
-                    isHighlight && "text-2xl"
-                )}>
-                    {text}
-                </p>
-                {helper && (
-                    <p className="text-sm text-muted-foreground mt-2">
-                        {helper}
-                    </p>
-                )}
-            </CardContent>
-        </Card>
+        <div className="flex items-center gap-2 justify-center">
+            {[...Array(totalRounds)].map((_, idx) => {
+                const roundNum = idx + 1
+                const isActive = roundNum === currentRound
+                const isCompleted = roundNum < currentRound
+                const isFinal = roundNum === totalRounds
+
+                return (
+                    <div key={idx} className="flex items-center">
+                        <div
+                            className={cn(
+                                "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all",
+                                isActive && "bg-primary text-primary-foreground scale-110 ring-2 ring-primary/50",
+                                isCompleted && "bg-primary/20 text-primary",
+                                !isActive && !isCompleted && "bg-muted text-muted-foreground",
+                                isFinal && isActive && "bg-red-500 text-white ring-red-500/50"
+                            )}
+                        >
+                            {isFinal ? "🚨" : roundNum}
+                        </div>
+                        {idx < totalRounds - 1 && (
+                            <div className={cn(
+                                "w-6 h-0.5 mx-1",
+                                isCompleted ? "bg-primary" : "bg-muted"
+                            )} />
+                        )}
+                    </div>
+                )
+            })}
+            {hostagesToSwap > 0 && (
+                <span className="text-xs text-muted-foreground ml-2">
+                    🔄 {hostagesToSwap} คน
+                </span>
+            )}
+        </div>
     )
 }
 
 // ===== MAIN PLAY PAGE =====
 export function TwoRoomsPlayPage() {
     const navigate = useNavigate()
-    const session = useAppStore(state =>
-        state.activeSessionId ? state.sessions[state.activeSessionId] : null
-    )
-    const setStep = useAppStore(state => state.setStep)
+    const activeSessionId = useAppStore(state => state.activeSessionId)
+    const sessions = useAppStore(state => state.sessions)
+    const updateSession = useAppStore(state => state.updateSession)
+    const markStepComplete = useAppStore(state => state.markStepComplete)
+    const addCheckpoint = useAppStore(state => state.addCheckpoint)
 
-    // Game state
-    const [gameState, setGameState] = useState<GameState>("SETUP_PHASE")
+    const session = activeSessionId ? sessions[activeSessionId] : null
+
+    // Timer state
     const [timeRemaining, setTimeRemaining] = useState(0)
     const [totalTime, setTotalTime] = useState(0)
     const [isPaused, setIsPaused] = useState(true)
     const [soundEnabled, setSoundEnabled] = useState(true)
     const [hasPlayedWarning, setHasPlayedWarning] = useState(false)
+    const [notesOpen, setNotesOpen] = useState(false)
 
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
     // Redirect if no session
     useEffect(() => {
-        if (!session) {
+        if (!activeSessionId || !session) {
             navigate("/two-rooms/setup")
         }
-    }, [session, navigate])
+    }, [activeSessionId, session, navigate])
+
+    // Flatten phases to steps
+    const { allSteps, phases } = useMemo(() => {
+        if (!session) return { allSteps: [], phases: [] }
+
+        const settings = session.settings as TwoRoomsSettings
+        const generatedPhases = twoRoomsScriptFactory(settings)
+        const steps: ExtendedStep[] = []
+
+        generatedPhases.forEach((p, pIdx) => {
+            p.steps.forEach((s, sIdx) => {
+                steps.push({
+                    ...s,
+                    phaseIndex: pIdx,
+                    stepIndex: sIdx,
+                    turnLabel: p.turnLabel
+                })
+            })
+        })
+
+        return { allSteps: steps, phases: generatedPhases }
+    }, [session?.settings])
+
+    // Current global index
+    const currentGlobalIndex = useMemo(() => {
+        if (!session) return 0
+        return allSteps.findIndex(s => s.phaseIndex === session.phaseIndex && s.stepIndex === session.stepIndex)
+    }, [session?.phaseIndex, session?.stepIndex, allSteps])
 
     if (!session) return null
 
     const settings = session.settings as TwoRoomsSettings
-    const phases = twoRoomsScriptFactory(settings)
-    const currentPhase = phases[session.phaseIndex]
-    const currentStep = currentPhase?.steps[session.stepIndex]
-
-    // Determine if current step has a timer
-    const hasTimer = currentStep?.timerSeconds !== undefined && currentStep.timerSeconds > 0
+    const activeStep = allSteps[currentGlobalIndex]
+    const hasTimer = activeStep?.timerSeconds !== undefined && activeStep.timerSeconds > 0
 
     // Initialize timer when entering a timed step
     useEffect(() => {
-        if (hasTimer && currentStep?.timerSeconds) {
-            setTimeRemaining(currentStep.timerSeconds)
-            setTotalTime(currentStep.timerSeconds)
+        if (hasTimer && activeStep?.timerSeconds) {
+            setTimeRemaining(activeStep.timerSeconds)
+            setTotalTime(activeStep.timerSeconds)
             setIsPaused(false) // Auto-start timer
             setHasPlayedWarning(false)
-            setGameState("ROUND_ACTIVE")
-        } else {
-            setGameState(session.phaseIndex === 0 ? "SETUP_PHASE" :
-                session.phaseIndex === phases.length - 1 ? "GAME_OVER" : "ROUND_END")
         }
-    }, [session.phaseIndex, session.stepIndex])
+    }, [currentGlobalIndex, hasTimer, activeStep?.timerSeconds])
 
     // Timer countdown logic
     useEffect(() => {
-        if (!hasTimer || isPaused) {
+        if (!hasTimer || isPaused || timeRemaining <= 0) {
             if (timerRef.current) clearInterval(timerRef.current)
             return
         }
@@ -199,10 +271,10 @@ export function TwoRoomsPlayPage() {
         timerRef.current = setInterval(() => {
             setTimeRemaining(prev => {
                 if (prev <= 1) {
-                    // Time's up!
                     if (timerRef.current) clearInterval(timerRef.current)
                     playSound("buzzer")
-                    setGameState("ROUND_END")
+                    // Auto-advance after timer ends
+                    setTimeout(() => handleMarkDone(), 1000)
                     return 0
                 }
 
@@ -219,13 +291,12 @@ export function TwoRoomsPlayPage() {
         return () => {
             if (timerRef.current) clearInterval(timerRef.current)
         }
-    }, [hasTimer, isPaused, settings.features.autoWarningAt60s, hasPlayedWarning])
+    }, [hasTimer, isPaused, timeRemaining, settings.features.autoWarningAt60s, hasPlayedWarning])
 
-    // Sound effects (simplified - would use Web Audio API in production)
+    // Sound effects
     const playSound = useCallback((type: "whistle" | "buzzer" | "warning" | "bomb") => {
         if (!soundEnabled) return
 
-        // Use browser's built-in beep for MVP
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
         const oscillator = audioContext.createOscillator()
         const gainNode = audioContext.createGain()
@@ -272,55 +343,61 @@ export function TwoRoomsPlayPage() {
         }
     }, [soundEnabled])
 
-    // Navigation helpers using setStep
-    const advanceStep = () => {
-        if (!currentPhase) return
+    const handleMarkDone = () => {
+        if (!activeStep) return
 
-        const nextStepIndex = session.stepIndex + 1
-        if (nextStepIndex < currentPhase.steps.length) {
-            setStep(session.phaseIndex, nextStepIndex)
+        markStepComplete(activeStep.id)
+
+        const nextIndex = currentGlobalIndex + 1
+        if (nextIndex < allSteps.length) {
+            const nextStep = allSteps[nextIndex]
+            updateSession(activeSessionId!, (s) => {
+                s.phaseIndex = nextStep.phaseIndex
+                s.stepIndex = nextStep.stepIndex
+            })
         } else {
-            // Move to next phase
-            const nextPhaseIndex = session.phaseIndex + 1
-            if (nextPhaseIndex < phases.length) {
-                setStep(nextPhaseIndex, 0)
-            } else {
-                // Game complete
-                navigate("/two-rooms/summary")
-            }
+            navigate("/two-rooms/summary")
         }
-    }
-
-    const goBackStep = () => {
-        if (session.stepIndex > 0) {
-            setStep(session.phaseIndex, session.stepIndex - 1)
-        } else if (session.phaseIndex > 0) {
-            const prevPhase = phases[session.phaseIndex - 1]
-            setStep(session.phaseIndex - 1, prevPhase.steps.length - 1)
-        }
-    }
-
-    const handleNext = () => {
-        advanceStep()
     }
 
     const handleBack = () => {
-        goBackStep()
+        const prevIndex = currentGlobalIndex - 1
+        if (prevIndex >= 0) {
+            const prevStep = allSteps[prevIndex]
+            updateSession(activeSessionId!, (s) => {
+                s.phaseIndex = prevStep.phaseIndex
+                s.stepIndex = prevStep.stepIndex
+            })
+        }
+    }
+
+    const handleStepClick = (index: number) => {
+        if (index === currentGlobalIndex) {
+            handleMarkDone()
+        }
+    }
+
+    const handleCheckpointSave = (cp: Checkpoint) => {
+        addCheckpoint(cp)
+        handleMarkDone()
     }
 
     const handleTogglePause = () => {
         setIsPaused(prev => !prev)
     }
 
-    const handleSkipTimer = () => {
-        if (timerRef.current) clearInterval(timerRef.current)
-        setTimeRemaining(0)
-        setGameState("ROUND_END")
-        advanceStep()
+    const handleResetTimer = () => {
+        if (activeStep?.timerSeconds) {
+            setTimeRemaining(activeStep.timerSeconds)
+            setTotalTime(activeStep.timerSeconds)
+            setIsPaused(true)
+            setHasPlayedWarning(false)
+        }
     }
 
     // Get round info for header
     const getCurrentRoundInfo = () => {
+        const currentPhase = phases[session.phaseIndex]
         const roundMatch = currentPhase?.turnLabel.match(/รอบที่ (\d+)/)
         if (roundMatch) {
             const roundNum = parseInt(roundMatch[1])
@@ -337,106 +414,112 @@ export function TwoRoomsPlayPage() {
     const roundInfo = getCurrentRoundInfo()
 
     return (
-        <div className="min-h-screen bg-background flex flex-col">
-            {/* HEADER: Round info */}
-            <header className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b p-4">
-                <div className="container max-w-lg mx-auto flex items-center justify-between">
-                    <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
-                        <ChevronLeft className="w-5 h-5" />
-                    </Button>
-
-                    <div className="text-center">
-                        <div className="text-lg font-bold">
-                            {currentPhase?.title_th}
-                        </div>
-                        {roundInfo && (
-                            <div className="text-sm text-muted-foreground">
-                                Round {roundInfo.round}/{roundInfo.total}
-                                {roundInfo.hostages > 0
-                                    ? ` • Swap ${roundInfo.hostages}`
-                                    : " • Final!"
-                                }
-                            </div>
-                        )}
-                    </div>
-
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setSoundEnabled(!soundEnabled)}
-                    >
-                        {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-                    </Button>
+        <div className="h-screen w-full flex flex-col bg-background fixed inset-0">
+            {/* HEADER */}
+            <header className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur z-10">
+                <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+                    <ChevronLeft />
+                </Button>
+                <div className="text-center">
+                    <h2 className="font-bold text-sm">
+                        {phases[session.phaseIndex]?.title_th || "Two Rooms"}
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                        {roundInfo
+                            ? `Round ${roundInfo.round}/${roundInfo.total} • ${roundInfo.hostages > 0 ? `Swap ${roundInfo.hostages}` : "Final!"}`
+                            : activeStep?.turnLabel || ""}
+                    </p>
                 </div>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSoundEnabled(!soundEnabled)}
+                >
+                    {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+                </Button>
             </header>
 
-            {/* MAIN CONTENT */}
-            <main className="flex-1 container max-w-lg mx-auto p-4 space-y-6">
-
-                {/* BIG TIMER (when in ROUND_ACTIVE) */}
-                {hasTimer && timeRemaining > 0 && (
-                    <BigTimer
-                        seconds={timeRemaining}
-                        totalSeconds={totalTime}
-                        isPaused={isPaused}
-                        onTogglePause={handleTogglePause}
+            {/* ROUND PROGRESS BAR */}
+            {roundInfo && (
+                <div className="bg-muted/30 py-2 border-b">
+                    <RoundProgress
+                        currentRound={roundInfo.round}
+                        totalRounds={roundInfo.total}
+                        hostagesToSwap={roundInfo.hostages}
                     />
-                )}
+                </div>
+            )}
 
-                {/* ROLLING SCRIPT */}
-                {currentStep && (
-                    <RollingScript
-                        text={currentStep.text_th}
-                        helper={currentStep.helper_th}
-                        isHighlight={gameState === "ROUND_END" || currentStep.requires_confirm}
-                    />
-                )}
+            {/* FLOATING TIMER */}
+            {hasTimer && timeRemaining > 0 && (
+                <FloatingTimer
+                    seconds={timeRemaining}
+                    totalSeconds={totalTime}
+                    isPaused={isPaused}
+                    onTogglePause={handleTogglePause}
+                    onReset={handleResetTimer}
+                />
+            )}
 
-                {/* SOUNDBOARD (always visible during active rounds) */}
-                {(gameState === "ROUND_ACTIVE" || gameState === "ROUND_END") && (
+            {/* ROLLING LYRIC VIEW - Smooth scrolling script display */}
+            <RollingLyricView
+                steps={allSteps}
+                activeIndex={currentGlobalIndex}
+                onStepClick={handleStepClick}
+                onCheckpointSave={handleCheckpointSave}
+                onCheckpointSkip={handleMarkDone}
+            />
+
+            {/* SOUNDBOARD (show during rounds) */}
+            {roundInfo && (
+                <div className="py-2 border-t bg-background/80 backdrop-blur">
                     <Soundboard
                         onWhistle={() => playSound("whistle")}
                         onBomb={() => playSound("bomb")}
-                        disabled={false}
                         soundEnabled={soundEnabled}
                     />
-                )}
+                </div>
+            )}
 
-                {/* SKIP TIMER BUTTON (only during active timer) */}
-                {hasTimer && timeRemaining > 0 && (
-                    <Button
-                        variant="ghost"
-                        className="w-full text-muted-foreground"
-                        onClick={handleSkipTimer}
-                    >
-                        <SkipForward className="w-4 h-4 mr-2" />
-                        ข้ามไป (หมดเวลาก่อน)
-                    </Button>
-                )}
-            </main>
+            {/* BOTTOM DOCK - Same pattern as werewolf */}
+            <div className="p-4 pb-8 border-t bg-background/95 backdrop-blur z-10 flex gap-4 items-center justify-between">
+                <Button variant="outline" size="icon" onClick={handleBack} className="h-14 w-14 rounded-full">
+                    <ChevronLeft />
+                </Button>
 
-            {/* FOOTER: Navigation */}
-            <footer className="sticky bottom-0 bg-background/95 backdrop-blur border-t p-4">
-                <div className="container max-w-lg mx-auto flex gap-4">
+                <div className="flex-1 flex gap-2 justify-center">
                     <Button
-                        variant="outline"
-                        onClick={handleBack}
-                        disabled={session.phaseIndex === 0 && session.stepIndex === 0}
-                        className="flex-1"
-                    >
-                        <ChevronLeft className="w-4 h-4 mr-2" />
-                        ย้อนกลับ
-                    </Button>
-                    <Button
-                        onClick={handleNext}
-                        className="flex-1"
+                        className="h-14 flex-1 rounded-full text-lg shadow-lg"
+                        onClick={handleMarkDone}
+                        variant="default"
                         disabled={hasTimer && timeRemaining > 0 && !isPaused}
                     >
-                        {currentStep?.requires_confirm ? "✅ ยืนยัน" : "ถัดไป"}
-                        <ChevronRight className="w-4 h-4 ml-2" />
+                        <Check className="mr-2 h-6 w-6" />
+                        ทำเสร็จแล้ว
                     </Button>
                 </div>
-            </footer>
+
+                <Button
+                    variant="secondary"
+                    size="icon"
+                    className="h-12 w-12 rounded-full"
+                    onClick={() => setNotesOpen(true)}
+                >
+                    <NotebookPen className="h-5 w-5" />
+                </Button>
+            </div>
+
+            {/* Notes Sheet */}
+            {notesOpen && activeStep && (
+                <NotesSheet
+                    onClose={() => setNotesOpen(false)}
+                    currentCtx={{
+                        phaseId: session.phaseIndex.toString(),
+                        stepId: activeStep.id,
+                        turnLabel: activeStep.turnLabel || "Two Rooms"
+                    }}
+                />
+            )}
         </div>
     )
 }

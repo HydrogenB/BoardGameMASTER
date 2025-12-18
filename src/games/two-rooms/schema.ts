@@ -1,25 +1,81 @@
 import { z } from "zod"
 
-export const twoRoomsRolesSchema = z.object({
-    includeGambler: z.boolean().default(false),
+// Round configuration schema
+export const roundConfigSchema = z.object({
+    round_idx: z.number(),
+    duration_sec: z.number().min(30).max(600),
+    hostages_to_swap: z.number().min(0).max(5),
 })
 
+// Game configuration presets
+export const gameConfigSchema = z.object({
+    config_id: z.string(),
+    rounds: z.array(roundConfigSchema),
+})
+
+// Role schema
+export const roleSchema = z.object({
+    role_id: z.string(),
+    name: z.string(),
+    name_th: z.string(),
+    team: z.enum(["RED", "BLUE", "GREY", "GREEN"]),
+    icon_asset: z.string().optional(),
+    script_intro: z.string(),
+    is_core: z.boolean(),
+})
+
+// Main settings schema
 export const twoRoomsSettingsSchema = z.object({
     playerCount: z.number().min(6, "ต้องมีผู้เล่นอย่างน้อย 6 คน").max(30, "รองรับผู้เล่นสูงสุด 30 คน"),
-    roundDurations: z.object({
-        round1: z.number().min(60).max(300).default(180), // 3 mins
-        round2: z.number().min(60).max(300).default(120), // 2 mins
-        round3: z.number().min(30).max(180).default(60),  // 1 min
+    config: gameConfigSchema.default({
+        config_id: "standard_game",
+        rounds: [
+            { round_idx: 1, duration_sec: 300, hostages_to_swap: 2 }, // 5 นาที
+            { round_idx: 2, duration_sec: 240, hostages_to_swap: 1 }, // 4 นาที
+            { round_idx: 3, duration_sec: 180, hostages_to_swap: 1 }, // 3 นาที
+            { round_idx: 4, duration_sec: 120, hostages_to_swap: 1 }, // 2 นาที
+            { round_idx: 5, duration_sec: 60, hostages_to_swap: 0 },  // 1 นาที (Final)
+        ],
     }),
-    hostagesPerRound: z.object({
-        round1: z.number().min(1).max(5).default(2),
-        round2: z.number().min(1).max(3).default(1),
-        round3: z.number().min(1).max(2).default(1),
-    }),
-    roles: twoRoomsRolesSchema,
+    selectedRoles: z.array(z.string()).default(["president", "bomber"]),
     features: z.object({
-        checkpointsEnabled: z.boolean().default(false),
+        soundEnabled: z.boolean().default(true),
+        autoWarningAt60s: z.boolean().default(true),
     }),
 })
 
+export type RoundConfig = z.infer<typeof roundConfigSchema>
+export type GameConfig = z.infer<typeof gameConfigSchema>
+export type Role = z.infer<typeof roleSchema>
 export type TwoRoomsSettings = z.infer<typeof twoRoomsSettingsSchema>
+
+// Preset configurations
+export const GAME_PRESETS: Record<string, GameConfig> = {
+    standard_game: {
+        config_id: "standard_game",
+        rounds: [
+            { round_idx: 1, duration_sec: 300, hostages_to_swap: 2 },
+            { round_idx: 2, duration_sec: 240, hostages_to_swap: 1 },
+            { round_idx: 3, duration_sec: 180, hostages_to_swap: 1 },
+            { round_idx: 4, duration_sec: 120, hostages_to_swap: 1 },
+            { round_idx: 5, duration_sec: 60, hostages_to_swap: 0 },
+        ],
+    },
+    quick_game: {
+        config_id: "quick_game",
+        rounds: [
+            { round_idx: 1, duration_sec: 180, hostages_to_swap: 2 },
+            { round_idx: 2, duration_sec: 120, hostages_to_swap: 1 },
+            { round_idx: 3, duration_sec: 60, hostages_to_swap: 0 },
+        ],
+    },
+    party_game: {
+        config_id: "party_game",
+        rounds: [
+            { round_idx: 1, duration_sec: 240, hostages_to_swap: 3 },
+            { round_idx: 2, duration_sec: 180, hostages_to_swap: 2 },
+            { round_idx: 3, duration_sec: 120, hostages_to_swap: 1 },
+            { round_idx: 4, duration_sec: 60, hostages_to_swap: 0 },
+        ],
+    },
+}

@@ -2,11 +2,6 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { SessionState, GameId, Note, Checkpoint } from '@/lib/types'
 
-// Use a mapped type for settings to allow extensibility
-type SettingsMap = {
-    werewolf: any // We can import WerewolfSettings but keeping it loose here avoids circular deps if schema imports types
-}
-
 interface AppState {
     // Active session being played
     activeSessionId: string | null
@@ -40,7 +35,8 @@ export const useAppStore = create<AppState>()(
             sessions: {},
             lastSettings: {
                 werewolf: {},
-                catan: {}
+                catan: {},
+                "two-rooms": {}
             },
 
             createSession: (gameId, settings) => {

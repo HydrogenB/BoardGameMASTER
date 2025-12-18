@@ -94,6 +94,30 @@ export function LandingPage() {
                         </Link>
                     </CardFooter>
                 </Card>
+
+                <Card className="hover:border-primary/50 transition-colors border-2 border-dashed border-red-500/30">
+                    <CardHeader>
+                        <div className="flex justify-between items-start">
+                            <CardTitle className="text-xl">Two Rooms and a Boom</CardTitle>
+                            <span className="text-xs bg-red-500/20 text-red-500 px-2 py-1 rounded">NEW</span>
+                        </div>
+                        <CardDescription>🔴 vs 🔵 • Social Deduction</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-sm text-muted-foreground">
+                            เกมปาร์ตี้สุดมันสำหรับ 6-30 คน! แบ่ง 2 ห้อง จับเวลา แลกตัวประกัน
+                            พร้อม Soundboard สำหรับ GM
+                        </p>
+                    </CardContent>
+                    <CardFooter>
+                        <Link to="/two-rooms/setup" className="w-full">
+                            <Button variant="outline" className="w-full border-red-500/50 hover:bg-red-500/10">
+                                <Play className="mr-2 w-4 h-4" />
+                                💣 เริ่มเกมใหม่
+                            </Button>
+                        </Link>
+                    </CardFooter>
+                </Card>
             </div>
         </div>
     )

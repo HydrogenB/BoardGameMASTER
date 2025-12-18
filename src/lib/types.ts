@@ -1,4 +1,4 @@
-export type GameId = "werewolf" | "catan"
+export type GameId = "werewolf" | "catan" | "two-rooms"
 
 export type GameStatus = "IN_PROGRESS" | "COMPLETED" | "ABANDONED"
 

@@ -298,15 +298,13 @@ export function CatanPlayPage() {
             </header>
 
             {/* Main Lyrics View */}
-            <div className="flex-1 w-full">
-                <RollingLyricView
-                    steps={stepsToShow}
-                    activeIndex={activeIndex}
-                    onStepClick={handleStepClick}
-                    onCheckpointSave={handleCheckpointSave}
-                    onCheckpointSkip={handleCheckpointSkip}
-                />
-            </div>
+            <RollingLyricView
+                steps={stepsToShow}
+                activeIndex={activeIndex}
+                onStepClick={handleStepClick}
+                onCheckpointSave={handleCheckpointSave}
+                onCheckpointSkip={handleCheckpointSkip}
+            />
 
             {/* Bottom Dock - Always visible like Werewolf */}
             <div className="p-4 pb-8 border-t bg-background/95 backdrop-blur z-10 flex gap-4 items-center justify-between">

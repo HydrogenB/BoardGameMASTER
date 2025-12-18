@@ -55,8 +55,19 @@ const GAMES: GameConfig[] = [
         playerRange: "6-30",
         duration: "15-30 นาที",
         category: "party",
-        isNew: true,
         accent: "red"
+    },
+    {
+        id: "salem",
+        name: "Salem 1692",
+        subtitle: "การล่าแม่มดแห่งเซเลม",
+        description: "กล่าวหา หาแม่มด พร้อม Night Script สำหรับ GM",
+        icon: "🔥",
+        playerRange: "4-12",
+        duration: "20-40 นาที",
+        category: "deduction",
+        isNew: true,
+        accent: "orange"
     },
     // Future games - set comingSoon: true
     // {

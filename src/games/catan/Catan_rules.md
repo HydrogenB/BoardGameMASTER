@@ -1,340 +1,369 @@
-## PRD: Board Game Master — Game #2 “Catan” (Frontend-only, Thai-first)
-
-### 1) Objective
-
-Build the **Catan Host Assistant** as a turn-by-turn “rolling lyric” instruction experience (same core player pattern as Werewolf), optimized for a host to run setup + enforce turn structure + handle edge cases fast. **No backend**. **All UI and script text in Thai**.
-
-### 2) Target Users
-
-* **Host/Facilitator (GM-like)**: wants a clean checklist + turn loop prompts.
-* **New groups**: need reminders for setup, placement order, “rolled 7”, robber rules, build/trade constraints.
-
-### 3) Non-goals (MVP)
-
-* Full rules engine that validates every legal move
-* Multiplayer sync
-* Auto score calculation from board state
-* Expansion rules (Seafarers/C&K) in MVP
+ด้านล่างคือ **“Catan (Base Game) Rules & Scenario Logic Spec”** แบบเขียนใหม่ (ไม่ก๊อปกฎจากหนังสือ) เพื่อให้คุณเอาไปแปะลงโค้ด/ทำ `scriptFactory` ได้เป็นระบบ ครอบคลุม setup + turn loop + edge cases หลัก ๆ
 
 ---
 
-# 4) Information Architecture / Routes
+## 0) คำจำกัดความ (Entities / Components)
 
-* `/` Landing: list games (Werewolf + Catan)
-* `/catan/setup` Create session
-* `/catan/play` Rolling lyric play
-* `/catan/summary` Summary + export JSON
+### ผู้เล่น (Player)
 
----
+* `roads`: สูงสุด 15 ชิ้น
+* `settlements`: สูงสุด 5 ชิ้น
+* `cities`: สูงสุด 4 ชิ้น
+* `handResources`: การ์ดทรัพยากร (brick/lumber/wool/grain/ore)
+* `devCards`: การ์ดพัฒนาในมือ
+* `playedKnightsCount`: จำนวน Knight ที่ “เล่นแล้ว” (ใช้สำหรับ Largest Army)
+* `victoryPoints`: คำนวณจากสิ่งปลูกสร้าง + การ์ด + รางวัล
 
-# 5) UX Principles (Catan-specific)
+### ทรัพยากร (Resources)
 
-* **Single primary action**: “ทำเสร็จแล้ว” (Mark done)
-* **Never block the table**: edge-case flows must be callable in 1 tap (bottom dock quick actions)
-* **Readable aloud**: 1–2 short Thai sentences per step
-* **State-light but context-rich**: show current player + phase + quick reminders
+* 5 ชนิด: `brick, lumber, wool, grain, ore`
+* “ธนาคาร/กองกลาง” มีทรัพยากรจำกัด (อาจหมดได้)
 
----
+### กระดาน (Board)
 
-# 6) Requirements (MVP) — Setup → Play → Notes → Summary
+* `hex tiles` (ทรัพยากร) + `desert`
+* `number tokens` 2–12 (ไม่มี 7 บนไทล์)
+* `robber` อยู่บน 1 ไทล์เสมอ (เริ่มที่ desert)
+* `ports` (2:1 เฉพาะทรัพยากร หรือ 3:1 ทั่วไป)
 
-## Requirement 1: Catan Setup (Session Creation)
+### สิ่งปลูกสร้าง
 
-**Description**
-Host sets party + rules preferences before starting. Should support 3–4 players baseline, optional 5–6 extension toggle.
-
-**Solution & Design**
-Page: `/catan/setup`
-
-### Setup fields
-
-1. Party
-
-* `playerCount`: 3–4 (default 4)
-* `playerNames[]`: optional but recommended (default: ผู้เล่น A/B/C/D)
-* `turnTimerEnabled`: bool
-* `turnTimerSeconds`: 60–180 (default 120)
-
-2. Victory condition
-
-* `victoryPointsTarget`: default 10
-
-3. Board setup mode
-
-* `boardMode`:
-
-  * `BEGINNER` (แนะนำสำหรับมือใหม่)
-  * `RANDOMIZED` (สุ่มไทล์/ตัวเลข/พอร์ต)
-  * `MANUAL` (จัดเองตามกล่อง)
-* `friendlyRobberEnabled`: bool (optional house rule)
-
-4. Trading reminders
-
-* `enableTradePrompts`: bool (default ON)
-* `enablePortReminders`: bool (default ON)
-
-5. Checkpoints / Notes
-
-* `checkpointsEnabled`: default ON (หลังจบรอบ หรือหลังเหตุการณ์สำคัญ)
-* `notesEnabled`: default ON
-* `quickTagsEnabled`: default ON (เช่น “ของน้อย”, “ถือ ore”, “กำลังล่า longest road”)
-
-### Validation
-
-* playerCount in allowed range
-* names unique (if provided)
-* VP target 8–12 (limit)
-
-CTA:
-
-* Primary: “เริ่มเกม Catan”
-* Persist last settings to LocalStorage.
+* Road: วางบน “ขอบ/edge”
+* Settlement/City: วางบน “จุดตัด/vertex”
+* ข้อจำกัดสำคัญ: Settlement/City **ห้ามติดกัน** (ต้องห่างอย่างน้อย 2 เส้นทาง)
 
 ---
 
-## Requirement 2: Catan Play UI (Rolling Lyric + Current Player)
+## 1) เงื่อนไขชนะ (Victory)
 
-**Description**
-Same lyric-style stack UI, but must add “current player” and “quick event flows”.
+* เป้าหมายปกติ: `10 VP`
+* ชนะเมื่อ **ถึง/เกิน 10 VP ใน “ตาของตัวเอง”** และ “จบตา” (Host announce win)
 
-**Solution & Design**
-Page: `/catan/play`
+### คะแนน VP (Base)
 
-### Top bar
-
-* Title: “Catan”
-* Session badge: `4 คน • เป้าหมาย 10 VP • Timer 120s`
-* Current player indicator: `ตาของ: ผู้เล่น B`
-* Progress: `ตั้งกระดาน 3/9` or `รอบที่ 2 • ตา B • 2/8`
-
-### Center: RollingLyricView
-
-* 7–11 lines, active centered, fade others
-* Tap active text = “ทำเสร็จแล้ว”
-* Auto snap to active step on done/back
-
-### Bottom dock (Catan needs quick actions)
-
-Primary:
-
-* `ทำเสร็จแล้ว`
-
-Secondary:
-
-* `ย้อนกลับ`
-* `ข้าม` (only if step.can_skip)
-* `จดโน้ต`
-
-Quick actions (buttons or overflow menu):
-
-* `ทอยได้ 7` (jump to Robber flow)
-* `จบตา / ผู้เล่นถัดไป` (explicit end-turn action)
-* `เตือนเทรด/สร้าง` (optional helper sheet)
-
-Keyboard:
-
-* Space = done
-* ← = back
+* Settlement = 1 VP
+* City = 2 VP
+* Longest Road (ถ้าถือครอง) = 2 VP
+* Largest Army (ถ้าถือครอง) = 2 VP
+* Victory Point dev cards = 1 VP ต่อใบ (ซ่อนจนประกาศ)
 
 ---
 
-## Requirement 3: Catan Script Engine (Phase-based + repeatable turn loop)
+## 2) Setup Logic (Pre-game + Initial Placement)
 
-**Description**
-Catan is repetitive by turns. Script must be generated from settings and allow “loop phases”.
+### 2.1 ตั้งกระดาน (Board Setup)
 
-**Solution & Design**
-Implement `scriptFactory(settings) => phases[]` with these phase groups:
+3 โหมด (ตามที่คุณวางไว้ใน PRD)
 
-### Phase 0: เตรียมเกม (Setup Checklist)
+* `BEGINNER`: จัดตามรูปแบบแนะนำ/ตายตัว (ง่าย)
+* `RANDOMIZED`: สุ่มไทล์/ตัวเลข/พอร์ต (แต่ควรมีกฎเตือน “อย่าวาง 6 ติด 8” เป็น hint)
+* `MANUAL`: โฮสต์จัดเอง
 
-Example steps (Thai, short):
+**เริ่มต้น**
 
-* “เลือกโหมดกระดาน: Beginner/สุ่ม/จัดเอง”
-* “วางไทล์ทรัพยากร + ทะเลทราย”
-* “วางหมายเลข (ห้ามวาง 6 ติด 8 ใน Beginner ถ้าใช้กติกาบ้าน)” *(as reminder; not strict engine)*
-* “วางพอร์ต”
-* “แจกทรัพยากรเริ่มต้น (ถ้าใช้กติกานั้น)”
-* “เลือกคนเริ่ม (สุ่ม)”
+* วาง robber ที่ `desert`
 
-### Phase 1: วางบ้านเริ่มต้น (Initial Placement)
+### 2.2 เลือกผู้เล่นเริ่ม (First player)
 
-Needs “snake order”:
+* สุ่ม หรือเลือกตามกติกาบ้าน
+* เก็บ `currentPlayerIndex` ให้ชัด
 
-* รอบที่ 1: A → B → C → D วาง “ถนน 1 + บ้าน 1”
-* รอบที่ 2: D → C → B → A วาง “ถนน 1 + บ้าน 1” และ “รับทรัพยากรจากบ้านหลังที่ 2”
-  UI should show which player is placing now and provide “ทำเสร็จแล้ว” to advance.
+### 2.3 วางบ้านเริ่มต้นแบบ “งู” (Snake order)
 
-### Phase 2: วนลูปตาเล่น (Main Turn Loop)
+ผู้เล่นวาง **Settlement + Road ที่ติดกับ settlement นั้น** (ถนนต้องติดจุดที่วางบ้าน)
 
-For each player turn:
+**Round 1 (ตามลำดับ)**
+
+* A → B → C → D (หรือ 3 คน: A→B→C)
+
+**Round 2 (ย้อนกลับ)**
+
+* D → C → B → A
+
+**หลังวาง Settlement รอบที่ 2**
+
+* ผู้เล่น **รับทรัพยากรเริ่มต้น** จากไทล์ที่ติดกับ settlement รอบที่ 2 (ทุกไทล์ที่ติด ยกเว้น desert)
+* Settlement รอบแรก **ไม่รับ** ทรัพยากรเริ่มต้น
+
+### 2.4 กฎการวาง Settlement (สำคัญมาก)
+
+* ต้องอยู่บน vertex ว่าง
+* ต้องเว้นระยะ: vertex ที่ติดกัน (adjacent vertex) **ห้ามมี settlement/city** อยู่แล้ว
+* ในช่วง setup: ไม่ต้องมี road เชื่อมมาก่อน (ยกเว้น road ที่วางคู่กันใน setup)
+
+---
+
+## 3) Turn Structure (ตาการเล่นหลัก)
+
+ใน “ตาของผู้เล่น X” ให้ใช้โครงนี้ (คุณใช้เป็น rolling steps ได้เลย)
+
+### 3.1 Start Turn
+
+* แสดง: “เริ่มตา: ผู้เล่น X”
+
+### 3.2 Roll Dice (ทอยลูกเต๋า)
+
+ผลลัพธ์ 2–12
+
+* ถ้า **ไม่ใช่ 7** → ไป “แจกทรัพยากร”
+* ถ้า **ได้ 7** → เข้า “Robber Flow” ทันที
+
+### 3.3 Resource Production (เมื่อไม่ใช่ 7)
+
+สำหรับทุกไทล์ที่มีเลขตรงกับผลเต๋า:
+
+* ถ้าไทล์นั้น **ไม่ถูก robber ทับ**
+
+  * ผู้เล่นที่มี Settlement ติดไทล์นั้น รับทรัพยากร **1 ใบ**
+  * ผู้เล่นที่มี City ติดไทล์นั้น รับทรัพยากร **2 ใบ**
+
+**กรณีทรัพยากรในกองกลางไม่พอ (Bank shortage)**
+
+* แนวทาง deterministic ที่แนะนำ (ง่ายและกันทะเลาะ):
+
+  * ถ้า “จำนวนที่ต้องแจกทั้งหมด” > “จำนวนที่มีในกองกลาง” ⇒ **ทรัพยากรชนิดนั้น “ไม่แจกให้ใครเลย”** ในรอบนี้
+    (เป็น rule handling ที่พบใช้บ่อยและเข้ากับ spirit ของเกม)
+
+### 3.4 Trading Phase (เทรด)
+
+เกิดในตาของผู้เล่นปัจจุบันเท่านั้น
+
+* **Domestic trade**: เทรดกับผู้เล่นอื่นตามดีลที่ตกลงกันเอง
+* **Maritime trade**: เทรดกับ bank
+
+  * ปกติ: 4:1 (จ่ายทรัพยากรชนิดเดียว 4 ใบ แลก 1 ใบที่ต้องการ)
+  * ถ้ามีพอร์ต 3:1: จ่าย 3 ใบชนิดเดียว
+  * ถ้ามีพอร์ต 2:1 เฉพาะทรัพยากร: จ่าย 2 ใบชนิดนั้น
+* หมายเหตุ: ทำได้ “กี่ครั้งก็ได้” ถ้าทรัพยากรพอ
+
+### 3.5 Build / Actions Phase (สร้าง/อัปเกรด/ซื้อ dev)
+
+ผู้เล่นทำได้หลายครั้งในตาตัวเอง ตราบเท่าที่จ่ายทรัพยากรได้
+
+**ค่าใช้จ่าย**
+
+* Road: `brick + lumber`
+* Settlement: `brick + lumber + wool + grain`
+* City: `ore*3 + grain*2`
+* Dev card: `ore + wool + grain`
+
+**Building rules**
+
+* Road:
+
+  * ต้องวางบน edge ว่าง
+  * ต้อง “ต่อกับ” network ของตัวเอง: adjacent to existing road **หรือ** adjacent to own settlement/city
+* Settlement (ระหว่างเกม):
+
+  * ต้องวางบน vertex ว่าง
+  * ต้องห่างจาก settlement/city อื่นอย่างน้อย 2 edges (distance rule)
+  * ต้องต่อกับ road ของตัวเองอย่างน้อย 1 เส้น (อยู่ปลาย road)
+* City:
+
+  * อัปเกรด settlement ของตัวเองเท่านั้น
+  * เอา settlement กลับเข้ากองผู้เล่น (ไม่หายไป)
+* Piece limit:
+
+  * ถ้าชิ้นนั้นหมด (เช่น settlements ใช้ครบ 5) ⇒ สร้างเพิ่มไม่ได้จนกว่าจะอัปเกรดเป็น city เพื่อคืน settlement มา
+
+### 3.6 Development Cards (ซื้อ/เล่น)
+
+เด็คพื้นฐาน (จำนวนโดยทั่วไป):
+
+* Knight 14
+* Victory Point 5
+* Road Building 2
+* Monopoly 2
+* Year of Plenty 2
+
+**ข้อจำกัดการเล่น dev**
+
+* โดยหลัก: “ใน 1 เทิร์น เล่น dev card ได้สูงสุด 1 ใบ”
+  (ยกเว้น Victory Point ที่มักนับเป็นการ “เปิดเผยคะแนน” มากกว่า “เล่นเอฟเฟกต์” — ให้คุณกำหนดเป็น rule engine: VP เปิดเผยได้เมื่อไหร่ก็ได้ในเทิร์นเพื่อเช็คชนะ)
+* dev card ที่ “เพิ่งซื้อในเทิร์นนี้” **ห้ามใช้เอฟเฟกต์** ในเทิร์นเดียวกัน (ยกเว้น VP reveal ตามการออกแบบของคุณ)
+
+**เอฟเฟกต์การ์ด (Logic)**
+
+* Knight:
+
+  * ย้าย robber → เลือกผู้เล่นที่มีสิ่งปลูกสร้างติดไทล์นั้นเพื่อ “ขโมยการ์ดทรัพยากร 1 ใบแบบสุ่ม”
+  * เพิ่ม `playedKnightsCount +1` เพื่อเช็ครางวัล Largest Army
+* Road Building:
+
+  * วาง road ฟรี 2 เส้น (ต้องถูกกฎการวาง road)
+  * ถ้าวางได้จริงแค่ 1 เส้น (เพราะชิ้นหมด/ไม่มีตำแหน่งถูกต้อง) ⇒ วางเท่าที่ทำได้
+* Year of Plenty:
+
+  * เลือกทรัพยากร 2 ใบจาก bank (ชนิดเดียวกันได้)
+  * ถ้า bank มีไม่พอ ⇒ หยิบได้เท่าที่มี (0–2)
+* Monopoly:
+
+  * เลือกทรัพยากร 1 ชนิด
+  * ผู้เล่นอื่น “ต้องให้” การ์ดทรัพยากรชนิดนั้นทั้งหมดที่มีแก่ผู้ใช้การ์ด
+* Victory Point:
+
+  * เก็บเป็นความลับ จนผู้เล่นเลือกเปิดเผยเพื่อรวมคะแนน
+
+### 3.7 End Turn
+
+* แสดง “จบตา: ส่งให้ผู้เล่นถัดไป”
+* เปลี่ยน `currentPlayerIndex`
+* ถ้าครบรอบ (วนกลับผู้เล่นเริ่ม) ⇒ `roundNumber + 1`
+* เช็คชนะ: ถ้า VP ≥ target ⇒ ประกาศชนะแล้วจบเกม (status COMPLETED)
+
+---
+
+## 4) Robber Flow (กรณีทอยได้ 7 หรือเล่น Knight)
+
+### 4.1 Trigger
+
+* ได้ 7 จากการทอยเต๋า **หรือ**
+* เล่น Knight card
+
+### 4.2 Discard Rule (เฉพาะกรณี “ทอยได้ 7”)
+
+* ผู้เล่นที่มีการ์ดทรัพยากรในมือ **มากกว่า 7 ใบ** ต้องทิ้ง “ครึ่งหนึ่ง” (ปัดเศษลง)
+
+  * 8 ใบทิ้ง 4
+  * 9 ใบทิ้ง 4
+  * 10 ใบทิ้ง 5
+  * 11 ใบทิ้ง 5
+  * 12 ใบทิ้ง 6
+* ผู้เล่นที่มี 7 หรือน้อยกว่า **ไม่ทิ้ง**
+
+### 4.3 Move Robber
+
+* ผู้เล่นปัจจุบันเลือกไทล์ใหม่ให้ robber ไปอยู่
+* ไทล์ที่ถูก robber ทับจะ “ไม่ผลิตทรัพยากร” เมื่อเลขนั้นออก
+
+### 4.4 Steal (ขโมย)
+
+* ถ้ามี settlement/city ของผู้เล่นอื่นติดกับไทล์ใหม่:
+
+  * ผู้เล่นปัจจุบันเลือก “หนึ่งผู้เล่น” จากกลุ่มนั้น แล้วสุ่มขโมยทรัพยากร 1 ใบ
+* ถ้าไม่มีผู้เล่นติดไทล์ หรือเป้าหมายไม่มีการ์ด ⇒ ขโมยไม่ได้
+
+### 4.5 Return to Turn
+
+* ถ้าทอยได้ 7: หลัง robber จบ → กลับไป “ช่วงเทรด/สร้าง” ของผู้เล่นปัจจุบัน
+* ถ้าใช้ Knight: กลับไปทำ action ต่อในเทิร์นนั้น (ยังเป็นเทิร์นเดิม)
+
+---
+
+## 5) Longest Road (ตรรกะ + edge cases)
+
+**เกณฑ์ถือครอง**
+
+* ต้องมีความยาว “ถนนต่อเนื่อง” อย่างน้อย 5 เส้น
+* ถ้ามีคนถืออยู่แล้ว ต้อง “มากกว่า” ความยาวของเจ้าของเดิมเพื่อแย่ง (เท่ากันไม่เปลี่ยนมือ)
+
+**การนับความต่อเนื่อง**
+
+* ถนนต้องเชื่อมกันเป็นเส้นต่อเนื่อง (path)
+* “ทางแยก” ทำให้ต้องเลือกเส้นทางที่ยาวสุด (ไม่สามารถนับรวมกิ่งพร้อมกัน)
+* “วงกลม/loop” นับได้ตามเส้นทางต่อเนื่องที่ยาวสุด
+* **ถ้ามี settlement/city ของผู้เล่นอื่นวางคั่นที่จุดตัด** จะ “ตัด” เส้นทางถนน ทำให้ longest road อาจสั้นลงและอาจเสียรางวัลได้
+
+**Scenario logic**
+
+* ถ้าความยาวลดลงจนไม่มากที่สุดแล้ว ⇒ รางวัลอาจย้าย (ต้องคำนวณใหม่ทุกครั้งที่มีการวาง settlement/city บนจุดตัดที่ไปตัดถนน)
+
+> Implementation tip: ไม่ต้องทำ perfect graph algorithm ใน MVP ก็ได้ แต่ถ้าจะทำให้ถูก: model เป็น graph edges owned by player และคำนวณ longest simple path โดยมี node-blocking จาก opponent buildings.
+
+---
+
+## 6) Largest Army (ตรรกะ)
+
+* ได้เมื่อผู้เล่น “เล่น Knight แล้ว” อย่างน้อย 3 ใบ
+* ถ้ามีคนถืออยู่แล้ว ต้อง “มากกว่า” จำนวน Knight ที่เล่นแล้วของเจ้าของเดิม (เท่ากันไม่เปลี่ยน)
+
+---
+
+## 7) Trading Scenarios (ที่คนชอบงง)
+
+1. **เทรดกับผู้เล่นอื่น** ทำได้เฉพาะ “ตาของผู้เล่นปัจจุบัน”
+2. **เทรดกับ bank/port** ก็ทำได้เฉพาะ “ตาของผู้เล่นปัจจุบัน”
+3. **port 2:1** ใช้ได้เมื่อจ่าย “ทรัพยากรชนิดเดียวกับพอร์ต” เท่านั้น
+4. **port 3:1** ใช้ได้กับทรัพยากรชนิดใดก็ได้ (แต่ต้องจ่ายชนิดเดียวต่อดีล)
+
+---
+
+## 8) Edge Cases (ควรทำเป็น “Scenario Cards” ในระบบคุณ)
+
+รายการนี้เหมาะกับการทำ quick action / checkpoint / helper steps
+
+### A) Bank shortage
+
+* แจกไม่พอ ⇒ ไม่แจกทรัพยากรชนิดนั้นให้ใครในรอบนั้น (แนะนำ)
+
+### B) Robber + steal target none
+
+* วาง robber แล้วไม่มีผู้เล่นติด ⇒ ข้ามการขโมย
+
+### C) Road Building card วางไม่ครบ
+
+* วางได้เท่าที่ legal และมีชิ้น (0–2)
+
+### D) Year of Plenty bank ไม่พอ
+
+* หยิบได้เท่าที่มี (0–2)
+
+### E) ซื้อ dev แล้วอยากใช้เลย
+
+* ปฏิเสธ (ยกเว้น VP reveal ตาม design ของคุณ)
+
+### F) บรรลุ 10 VP กลางเทิร์น
+
+* เกม “จบ” เมื่อผู้เล่นประกาศ/เช็คแล้วในเทิร์นของตัวเอง และจบตา (host finalize)
+
+---
+
+## 9) แปลงเป็น “Step Scripts” สำหรับ Rolling Lyric (ตัวอย่างโครง)
+
+คุณสามารถทำ step generator ตาม state machine:
+
+### Phase: SETUP
+
+* steps เตรียมกระดาน
+
+### Phase: PLACEMENT_R1 / PLACEMENT_R2
+
+* step ต่อผู้เล่น:
+
+  * “ผู้เล่น X: วางบ้าน + ถนน”
+  * helper: “ห้ามติดบ้านคนอื่น (ต้องเว้น 2 ช่อง)”
+* หลัง PLACEMENT_R2 ของผู้เล่น X:
+
+  * “รับทรัพยากรเริ่มต้นจากบ้านหลังที่ 2”
+
+### Phase: TURN_LOOP
+
+สำหรับผู้เล่น X:
 
 1. “เริ่มตา: ผู้เล่น X”
 2. “ทอยลูกเต๋า”
-3. “แจกทรัพยากรตามผล (ย้ำ: ถ้า 7 ไป Robber)”
-4. “ช่วงเทรด (ถ้ามี): ธนาคาร/พอร์ต/ผู้เล่น”
-5. “ช่วงสร้าง/อัปเกรด: ถนน/บ้าน/เมือง/การ์ดพัฒนา”
+3. “แจกทรัพยากรตามผล (ถ้า 7 เรียกโหมดโจร)”
+4. “ช่วงเทรด”
+5. “ช่วงสร้าง/อัปเกรด/ซื้อ dev”
 6. “จบตา: ส่งให้ผู้เล่นถัดไป”
 
-### Special subflows (jump-in)
+### Subflow: ROBBER
 
-* **Robber Flow (เมื่อทอย 7)**:
-
-  * “ทุกคนที่มีเกิน 7 ใบ ทิ้งครึ่งหนึ่ง (ปัดเศษลง)”
-  * “ผู้เล่น X ย้ายโจรไปช่องใหม่”
-  * “เลือกผู้เล่นขโมยการ์ด 1 ใบ (ถ้ามีสิ่งปลูกสร้างติดกัน)”
-  * “กลับไปช่วงเทรด/สร้างของผู้เล่น X”
-
-### CHECKPOINT steps (optional)
-
-* หลัง “จบรอบ” หรือ “หลัง Robber”:
-
-  * rating 1–5 + note + skip
-
-> Implementation note: don’t hardcode infinite loops in static list. Use either:
-
-* generate N rounds (e.g., 20 rounds max) and allow “จบเกม” early, OR
-* store `turnIndex` in state and compute “current step list” dynamically (recommended).
+* discard steps (เฉพาะกรณีทอย 7)
+* move robber
+* steal
+* “กลับไปช่วงเทรด/สร้างของผู้เล่น X”
 
 ---
 
-## Requirement 4: Turn Control + Player Rotation
+## 10) สิ่งที่ต้องถามคุณ (ก่อน “แปะลงโค้ด” แบบไม่ย้อนแก้)
 
-**Description**
-Host must advance within turn and also rotate to next player deterministically.
+มี 5 จุดที่เป็น “กติกาบ้าน” บ่อยมาก ถ้าคุณเลือกตอนนี้ จะทำให้ script ชัด:
 
-**Solution & Design**
+1. ตอน **แจกไม่พอ**: ใช้กติกา “ไม่แจกให้ใคร” ใช่ไหม?
+2. **VP dev card**: ให้ “เปิดได้ตอนไหนก็ได้ในเทิร์น” หรือ “นับเป็น 1 dev/turn”?
+3. **Friendly robber**: เปิดไหม? (เช่น ห้ามวาง robber ทับผู้เล่นที่ยัง <3 VP)
+4. **จับเวลาเทิร์น**: ต้องการ timer UI จริงไหม หรือแค่ reminder step?
+5. ต้องการรองรับ **5–6 คน** ตั้งแต่แรกไหม?
 
-* State:
-
-  * `currentPlayerIndex`
-  * `roundNumber`
-  * `phaseKey`: SETUP / PLACEMENT / TURN_LOOP / ROBBER
-* Provide explicit action:
-
-  * Button `จบตา / ผู้เล่นถัดไป`:
-
-    * increments player index
-    * when wraps, roundNumber++
-    * jumps to “เริ่มตา: ผู้เล่น X” step
-
----
-
-## Requirement 5: Notes (Mark Note)
-
-**Description**
-Notes must attach to the current context (round, player, phase). Catan notes often refer to who is hoarding what.
-
-**Solution & Design**
-Bottom sheet:
-
-* noteText (required)
-* playerLabel (optional; default current player)
-* tags quick (if enabled): “ของเยอะ”, “ขาด brick”, “เน้น dev card”, “ล่า longest road”, “สงสัยถือ wheat”
-  Auto attach:
-* `phaseKey`, `roundNumber`, `currentPlayer`, `stepId`, timestamp
-
----
-
-## Requirement 6: Game Summary (Catan)
-
-**Description**
-Summary should be useful: what settings used, how long game ran, notes timeline, checkpoints.
-
-**Solution & Design**
-Page: `/catan/summary`
-Sections:
-
-1. Overview:
-
-* playerCount, VP target, boardMode, timer setting, checkpoints on/off
-* startedAt, endedAt (if completed)
-* last progress (round/player) if abandoned
-
-2. Notes timeline:
-
-* filter by playerLabel/tag
-
-3. Checkpoint report:
-
-* avg rating + list
-
-4. Export:
-
-* download `catan_session_{date}_{sessionId}.json`
-
-Actions:
-
-* `จบเกม` sets status COMPLETED
-* `กลับไปเล่นต่อ` resumes `/catan/play`
-
----
-
-# 7) Component List (Catan additions)
-
-Shared:
-
-* `RollingLyricView`
-* `StepPlayer`
-* `SessionMenuSheet`
-* `NotesSheet`
-* `CheckpointCard`
-* `SummaryPage`
-
-Catan-specific:
-
-* `PlayerChip` (current player display)
-* `TurnControlDock` (includes “Next player”, “Rolled 7”)
-* `CatanScriptFactory`
-
----
-
-# 8) Data Model (Catan)
-
-`CatanSettings`:
-
-* playerCount, playerNames[]
-* victoryPointsTarget
-* boardMode (BEGINNER/RANDOMIZED/MANUAL)
-* friendlyRobberEnabled
-* turnTimerEnabled, turnTimerSeconds
-* enableTradePrompts, enablePortReminders
-* notesEnabled, quickTagsEnabled
-* checkpointsEnabled, checkpointFrequency
-
-`CatanSessionRuntime`:
-
-* phaseKey
-* currentPlayerIndex
-* roundNumber
-* lastDiceRoll? (optional)
-* flags: `robberPending` (optional)
-
----
-
-# 9) Thai Localization Requirements
-
-* All UI labels in Thai:
-
-  * “เริ่มเกม Catan”, “ทำเสร็จแล้ว”, “จบตา / ผู้เล่นถัดไป”, “ทอยได้ 7”, “จดโน้ต”, “สรุปเกม”
-* Thai typography rules identical to Werewolf (big text, high contrast, responsive)
-
----
-
-# 10) MVP Acceptance Criteria
-
-* Setup can create session (3–4 players) and persists settings
-* Play starts at Phase 0 “เตรียมเกม”
-* Placement phase supports snake order and shows current player
-* Turn loop works with:
-
-  * Mark done step-by-step
-  * explicit “Next player”
-  * “Rolled 7” subflow jump and return to turn
-* Notes attach to round/player and appear in summary
-* Checkpoints optional, skippable
-* Summary + JSON export works, refresh resumes session
-
----
-
-If you want, I can also generate the **Thai step script template** for Catan (Prep + Placement + Turn loop + Robber) in the exact JSON structure you already use (`strings.th.ts` + `scriptFactory.ts`) so dev can drop it in immediately.
+ถ้าคุณตอบ 5 ข้อนี้ ผมจะเขียนเป็น **script ภาษาไทยแบบพร้อมวางลง `strings.th.ts` + `scriptFactory.ts`** ให้ตรงกับระบบคุณแบบไม่ต้องเดา.

@@ -5,6 +5,7 @@ import { WerewolfPlayPage } from "@/app/werewolf/play-page"
 import { WerewolfSummaryPage } from "@/app/werewolf/summary-page"
 import { CatanSetupPage } from "@/app/catan/setup-page"
 import { CatanPlayPage } from "@/app/catan/play-page"
+import { CatanSummaryPage } from "@/app/catan/summary-page"
 import { RouteGuard } from "@/components/route-guard"
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
         {/* Catan Routes */}
         <Route path="/catan/setup" element={<CatanSetupPage />} />
         <Route path="/catan/play" element={<CatanPlayPage />} />
+        <Route path="/catan/summary" element={<CatanSummaryPage />} />
 
         {/* Protected Routes */}
         <Route element={<RouteGuard />}>
@@ -29,3 +31,4 @@ function App() {
 }
 
 export default App
+

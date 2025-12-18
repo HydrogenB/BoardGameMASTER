@@ -39,7 +39,8 @@ export const useAppStore = create<AppState>()(
             activeSessionId: null,
             sessions: {},
             lastSettings: {
-                werewolf: {}
+                werewolf: {},
+                catan: {}
             },
 
             createSession: (gameId, settings) => {

@@ -86,22 +86,6 @@ export function WerewolfSummaryPage() {
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Checkpoints ({session.checkpoints.length})</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    {session.checkpoints.map(cp => (
-                        <div key={cp.id} className="flex justify-between items-center bg-secondary/10 p-4 rounded text-lg">
-                            <span>{cp.turnLabel}</span>
-                            <span className="font-bold text-yellow-500 flex items-center gap-1">
-                                {cp.rating} <span className="text-xs text-muted-foreground">/ 5</span>
-                            </span>
-                        </div>
-                    ))}
-                </CardContent>
-            </Card>
-
             <Button size="lg" className="w-full text-lg h-14" variant="outline" onClick={handleExport}>
                 <Download className="mr-2" /> Export JSON
             </Button>
